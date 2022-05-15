@@ -42,9 +42,14 @@ now you have installed all the required files, you can execute main.py
 
 ### grey filter
 
-It is a very important step that we require to perform in order to get the desired result
+    grey = cv2.cvtColor(crop_image,cv2.COLOR_BGR2GRAY)
+
+It is a very important step that needs to be performed in order to get the desired result
+
 
 ### Gaussian Blur
+
+    blur = cv2.GaussianBlur(grey,(35,35),0)
 
 In Gaussian Blur operation, the image is convolved with a Gaussian filter instead of the box filter. The Gaussian filter is a low-pass filter that removes the high-frequency components are reduced.
 
@@ -74,8 +79,23 @@ Here, the matter is straight-forward. For every pixel, the same threshold value 
 In this project cv2.THRESH_BINARY_INV is used
 
     ret,thresh= cv2.threshold(blur,127,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+    
+ ### Binary threshold inverted
 
-![Binary Inversion](./binary.jpg "threshold function")
+![Binary Inverted](./binary.jpg "threshold function")
+
+
+### Otsu's Binarization
+
+In global thresholding, we used an arbitrary chosen value as a threshold. In contrast, Otsu's method avoids having to choose a value and determines it automatically.
+
+Consider an image with only two distinct image values (bimodal image), where the histogram would only consist of two peaks. A good threshold would be in the middle of those two values. Similarly, Otsu's method determines an optimal global threshold value from the image histogram.
+
+In order to do so, the cv.threshold() function is used, where cv.THRESH_OTSU is passed as an extra flag. The threshold value can be chosen arbitrary. The algorithm then finds the optimal threshold value which is returned as the first output.
+
+Check out the example below. The input image is a noisy image. In the first case, global thresholding with a value of 127 is applied. In the second case, Otsu's thresholding is applied directly. In the third case, the image is first filtered with a 5x5 gaussian kernel to remove the noise, then Otsu thresholding is applied. See how noise filtering improves the result.
+
+![otsu](https://user-images.githubusercontent.com/93030904/168461709-9bdf4f63-0e6f-4c8a-892b-0e47fbbffd0e.jpeg)
 
 ### Contours
 
@@ -86,7 +106,7 @@ Since OpenCV 3.2, findContours() no longer modifies the source image but returns
 In OpenCV, finding contours is like finding white object from black background. So remember, object to be found should be white and background should be black.
 
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
+
     # Finding the contour with maximum area
     contour = max(contours, key=lambda x: cv2.contourArea(x))
     
@@ -107,3 +127,51 @@ Below image of a rectangle demonstrate this technique. Just draw a circle on all
 ![Chain Approximattion](./approx.jpg "Approximation simple")
 
 
+### Convex Hull
+
+    hull = cv2.convexHull(contour, returnPoints=False)
+    
+Finds the convex hull of a point set.
+
+The function cv2.convexHull finds the convex hull of a 2D point set using the Sklansky's algorithm [194] that has O(N logN) complexity in the current implementation.
+
+Parameters
+- points	Input 2D point set, stored in std::vector or Mat.
+- hull	Output convex hull. It is either an integer vector of indices or vector of points. In the first case, the hull elements are 0-based indices of the convex hull points in the original array (since the set of convex hull points is a subset of the original point set). In the second case, hull elements are the convex hull points themselves.
+- clockwise	Orientation flag. If it is true, the output convex hull is oriented clockwise. Otherwise, it is oriented counter-clockwise. The assumed coordinate system has its X axis pointing to the right, and its Y axis pointing upwards.
+- returnPoints	Operation flag. In case of a matrix, when the flag is true, the function returns convex hull points. Otherwise, it returns indices of the convex hull points.
+
+### Convexity Defects
+
+    defects = cv2.convexityDefects(contour, hull)
+
+
+![Convexity Defects](https://user-images.githubusercontent.com/93030904/168461387-94120ae1-553a-4516-9913-e956b959e9fd.png "Convexity defect")
+
+Parameters
+- contour:	Input contour.
+- convexhull:	Convex hull obtained using convexHull that should contain indices of the contour points that make the hull.
+- convexityDefects:	The output vector of convexity defects. In C++ and the new Python/Java interface each convexity defect is represented as 4-element integer vector (a.k.a. Vec4i): (start_index, end_index, farthest_pt_index, fixpt_depth), where indices are 0-based indices in the original contour of the convexity defect beginning, end and the farthest point, and fixpt_depth is fixed-point approximation (with 8 fractional bits) of the distance between the farthest contour point and the hull. That is, to get the floating-point value of the depth will be fixpt_depth/256.0.
+
+
+### Math for calculating the angles between fingers
+
+     for i in range(defects.shape[0]):
+            s, e, f, d = defects[i, 0]
+            start = tuple(contour[s][0])
+            end = tuple(contour[e][0])
+            far = tuple(contour[f][0])
+         
+        # calculating the angle using cosine formula
+        
+            a = math.sqrt((start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2)
+            b = math.sqrt((-start[0] + far[0]) ** 2 + (-start[1] + far[1]) ** 2)
+            c = math.sqrt((end[0] - far[0]) ** 2 + (end[1] - far[1]) ** 2)
+            angle = (math.acos((b**2 + c**2 - a**2) / (2*b*c)))*57
+
+            if angle <= 90:
+                count_defects += 1
+                cv2.circle(crop_image, far, 1, [0, 0, 255], -1)
+            cv2.line(crop_image, start, end, [0, 255, 0], 2)
+        
+Two fingers will create a angle less than 90 deg between them, Thus we count the number of angles less than 90 in the contours and add one to get the number of fingers. 
