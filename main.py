@@ -7,22 +7,32 @@ capture = cv2.VideoCapture(0)
 
 while True:
     success,img = capture.read()
-
+    
+    
+    # Frame Cropping
     cv2.rectangle(img,(700,100),(1100,500),(0,255,0),0)
     crop_image= img[100:500,700:1100]
+    
+    # Grey Filter
+    
     grey = cv2.cvtColor(crop_image,cv2.COLOR_BGR2GRAY)
-
+    
+    
+    # Gaussian Blur to smoothen the image
     blur = cv2.GaussianBlur(grey,(35,35),0)
 
-
+    # thresholding the image using Binary inversion + OTSU
     ret,thresh= cv2.threshold(blur,127,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
 
-
+    # show threshold
     cv2.imshow("Threshold",thresh)
+    
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     try:
+        # contour with maximum area
         contour = max(contours, key=lambda x: cv2.contourArea(x))
-
+        
+        # bounding rectangle for the contour
         x, y, w, h = cv2.boundingRect(contour)
         cv2.rectangle(crop_image, (x, y), (x + w, y + h), (0, 0, 255), 0)
 
@@ -33,7 +43,10 @@ while True:
         cv2.drawContours(drawing, [contour], -1, (0, 255, 0), 0)
         cv2.drawContours(drawing,[hull],-1,(0,0,255),0)
 
+        #finding convex hull   
         hull = cv2.convexHull(contour, returnPoints=False)
+        
+        # finding convexity defects
         defects = cv2.convexityDefects(contour, hull)
 
         count_defects = 0
@@ -42,7 +55,9 @@ while True:
             start = tuple(contour[s][0])
             end = tuple(contour[e][0])
             far = tuple(contour[f][0])
-
+         
+        # calculating the angle using cosine formula
+        
             a = math.sqrt((start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2)
             b = math.sqrt((-start[0] + far[0]) ** 2 + (-start[1] + far[1]) ** 2)
             c = math.sqrt((end[0] - far[0]) ** 2 + (end[1] - far[1]) ** 2)
@@ -52,6 +67,9 @@ while True:
                 count_defects += 1
                 cv2.circle(crop_image, far, 1, [0, 0, 255], -1)
             cv2.line(crop_image, start, end, [0, 255, 0], 2)
+            
+        # output
+        
         if count_defects == 0:
             cv2.putText(img, "ONE",(50,50), cv2.FONT_HERSHEY_SIMPLEX, 2, 2)
         elif count_defects == 1:
